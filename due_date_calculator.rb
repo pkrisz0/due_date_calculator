@@ -13,11 +13,14 @@ class DueDateCalculator
   end
 
   def resolution_date(submit_date, turnaround)
+    @weeks = turnaround / 40
     @days = turnaround / 8
     @hours = turnaround % 8
 
-    @hours += 16 unless within_working_hours?(submit_date + @hours.hours)
-    @days += 2 if turnaround_includes_weekend?(submit_date.wday + @days) || friday?(submit_date)
+    weekend_days = @weeks > 1 ? 2 * @weeks : 2
+
+    @days += weekend_days if turnaround_includes_weekend?(submit_date.wday + @days) || (friday?(submit_date) && !within_working_hours?(submit_date + @hours.hours))
+    @hours += 16  unless within_working_hours?(submit_date + @hours.hours)
 
     submit_date + @hours.hour + @days.days
   end
@@ -40,8 +43,8 @@ class DueDateCalculator
     date.wday == 5
   end
 
-  def turnaround_includes_weekend?(day_count)
-     day_count > 5
+  def turnaround_includes_weekend?(date)
+     date > 5
   end
 
   def within_working_hours?(date)
@@ -96,6 +99,11 @@ describe DueDateCalculator do
       expect(subject.calculate_due_date(wednesday, 1)).to eq expected_resolution
     end
 
+    it 'returns the same day if turnaround is within working hours on a friday' do
+      expected_resolution = '2019-09-13 14:38:00'.to_datetime
+      expect(subject.calculate_due_date('2019-09-13 13:38:00'.to_datetime, 1)).to eq expected_resolution
+    end
+
     it 'returns next day if resolution is after closing hour' do
       expected_resolution = '2019-09-12 10:38:00'.to_datetime
       expect(subject.calculate_due_date(wednesday, 6)).to eq expected_resolution
@@ -109,6 +117,11 @@ describe DueDateCalculator do
     it 'returns second day of next week if submitted during last day of week and takes over a working day to resolve' do
       expected_resolution = '2019-09-17 11:58:00'.to_datetime
       expect(subject.calculate_due_date('2019-09-13 16:58:00'.to_datetime, 11)).to eq expected_resolution
+    end
+
+    it 'calculates multiple weekends for 3 weeks' do
+      expected_resolution = '2019-09-23 14:12:00'.to_datetime
+      expect(subject.calculate_due_date('2019-09-02 14:12:00'.to_datetime, 120)).to eq expected_resolution
     end
   end
 end
